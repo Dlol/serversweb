@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hi</title>
+    <script>
+        function update() {
+            fetch("/listing").then(res => {
+                return res.json()
+            }).then(res => {
+                const display = document.getElementById("selection")
+                display.innerHTML = ""
+                for (const line of res) {
+                    const elem = document.createElement("option")
+                    elem.setAttribute("value", line)
+                    elem.appendChild(document.createTextNode(line))
+                    display.appendChild(elem)
+                }
+            })
+        }
+
+        function start() {
+            openTmux()
+            const display = document.getElementById("selection")
+            if (display.value == "update") return;
+            fetch(`/run/${display.value}`)
+        }
+
+        function stop() {
+            const display = document.getElementById("selection")
+            if (display.value == "update") return;
+            fetch(`/stop/${display.value}`)
+        }
+
+        let details = {}
+
+        function getDetails() {
+            console.log("gettin details");
+            const display = document.getElementById("selection")
+            if (display.value == "update") return;
+            console.log(display.value);
+            fetch(`/details/${display.value}`).then((res) => {
+                return res.json()
+            }).then((res) => {
+                details = res;
+                const nameElem = document.getElementById("serverName")
+                const descElem = document.getElementById("serverDesc")
+                const tmuxElem = document.getElementById("serverTmux")
+
+                nameElem.innerHTML = `${display.value} <small>(${res.category})</small>`
+                descElem.innerHTML = `<b>Desc:</b> ${res.desc}`;
+                tmuxElem.innerHTML = `<b>Tmux:</b> <code>${res.tmux}</code> <br><b>Path:</b> <code>${res.dir}</code>`;
+            })
+        }
+
+        /**
+         * @type {WebSocket} 
+         */
+        let ws = null;
+        function connectWs() {
+            if (ws != null) {
+                alert("disconnect first!")
+                return;
+            }
+            const url = window.location.href.replace("3000","3001").replace("http", "ws")
+            console.log(url);
+            ws = new WebSocket(url)
+
+            ws.addEventListener("open", (event) => {
+                ws.send("Ping!")
+            })
+
+            ws.addEventListener("message", (event) => {
+                console.log(`Server msg: ${event.data}`);
+                document.getElementById("tmuxoutput").innerText = event.data
+            })
+        }
+
+        function disconnectWs() {
+            if (ws != null) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function openTmux() {
+            ws.send(`tmux-connect ${details.tmux}`)
+        }
+
+        function sendData() {
+            const data = document.getElementById("textin").value
+            ws.send("tmux-send " + details.tmux + " " + data);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            update()
+            connectWs()
+        })
+	
+	document.addEventListener("beforeunload", () => {
+		disconnectWs()
+	})
+    </script>
+</head>
+<body>
+    <button onclick="update()">udpate</button>
+    <br>
+    <select id="selection" onchange="getDetails()">
+        <option value="update">hit update!</option>
+    </select>
+    <hr>
+    <h3 id="serverName"></h3>
+    <p id="serverDesc"><b>Desc: </b></p>
+    <p id="serverTmux"><b>Tmux name:</b> <code>__</code></p>
+    <button onclick="start()" id="startButton">start server</button>
+    <button onclick="stop()" id="stopButton">stop server</button>
+    <hr>
+    <h2>websocket stuff &lt;3</h2>
+    <button onclick="openTmux()">connect to tmux</button>
+    <pre id="tmuxoutput">
+        ~~output goes here~~
+    </pre>
+    <input type="text" id="textin">
+    <button onclick="sendData()">send</button>
+</body>
+</html>
